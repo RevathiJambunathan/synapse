@@ -189,10 +189,15 @@ def _calibration_penalty(
     )
     beta_guess = o_guess
 
+    alpha_mask = alpha_uncertainty > 0
+    beta_mask = beta_uncertainty > 0
+
     penalty_alpha = torch.sum(
-        (alpha_inferred - alpha_guess) ** 2 / alpha_uncertainty**2
+        (alpha_inferred[alpha_mask] - alpha_guess[alpha_mask]) ** 2 / alpha_uncertainty[alpha_mask]**2
     )
-    penalty_beta = torch.sum((beta_inferred - beta_guess) ** 2 / beta_uncertainty**2)
+    penalty_beta = torch.sum((beta_inferred[beta_mask] - beta_guess[beta_mask]) ** 2
+                            / beta_uncertainty[beta_mask]**2)
+
     return penalty_alpha + penalty_beta
 
 
@@ -269,6 +274,21 @@ def train_calibration(
     o_normcal_output = nn.Parameter(
         torch.zeros(n_outputs, dtype=exp_inputs.dtype, device=device)
     )
+
+    def make_freeze_hook(mask):
+        """Returns a hook that zeros gradients where mask is True."""
+        def hook(grad):
+            return grad.masked_fill(mask, 0.0)
+        return hook
+
+#    if (alpha_uncertainty_input == 0).any():
+#        c_normcal_input.register_hook(make_freeze_hook(alpha_uncertainty_input == 0))
+#    if (beta_uncertainty_input == 0).any():
+#        o_normcal_input.register_hook(make_freeze_hook(beta_uncertainty_input == 0))
+#    if (alpha_uncertainty_output == 0).any():
+#        c_normcal_output.register_hook(make_freeze_hook(alpha_uncertainty_output == 0))
+#    if (beta_uncertainty_output == 0).any():
+#        o_normcal_output.register_hook(make_freeze_hook(beta_uncertainty_output == 0))
 
     optimizer = optim.Adam(
         [c_normcal_input, o_normcal_input, c_normcal_output, o_normcal_output], lr=lr
